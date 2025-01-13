@@ -1,14 +1,35 @@
 import { create_signature } from "../api/signature";
-import axios from "axios";
-import { Address } from "viem";
 import { verifyTx } from "../api/create-tx-cyber";
+import { Address } from "viem";
+import dotenv from "dotenv";
+import { http, HttpResponse } from "msw";
+import { setupServer } from "msw/node";
 
-jest.mock("axios");
-const mockedAxios = axios as jest.Mocked<typeof axios>;
+dotenv.config();
 
-describe("create_signature", () => {
+const server = setupServer(
+  http.get(
+    "https://api.w3w.ai/cyber/v1/explorer/address/:address/transactions",
+    () => {
+      const mockData = {
+        data: [
+          { block_timestamp: "2025-01-15T10:00:00Z" },
+          { block_timestamp: "2025-01-16T11:00:00Z" },
+          { block_timestamp: "2024-12-31T23:59:59Z" },
+        ],
+      };
+      return HttpResponse.json(mockData);
+    }
+  )
+);
+
+describe("Verification and Signature Tests", () => {
   const mockAddress: Address = "0x1234567890abcdef1234567890abcdef12345678";
-  const mockPrivateKey = "0xc4444980d215a43777e47888705177d7f498ae90f3492d9644e922afdb405eb2";
+  const mockPrivateKey = process.env.VERIFIER_PRIVATE_KEY;
+
+  beforeAll(() => server.listen());
+  afterAll(() => server.close());
+  afterEach(() => server.resetHandlers());
 
   beforeEach(() => {
     process.env.VERIFIER_PRIVATE_KEY = mockPrivateKey;
@@ -18,95 +39,73 @@ describe("create_signature", () => {
     delete process.env.VERIFIER_PRIVATE_KEY;
   });
 
-  it("should create a valid signature", async () => {
-    const mockMintEligibility = true;
-    const mockData = "Test data";
-
-    const signature = await create_signature(
-      mockAddress,
-      mockMintEligibility,
-      mockData
-    );
-
-    expect(signature).toMatch(/^0x[a-fA-F0-9]{130}$/);
-    expect(signature).toBeTruthy();
-  });
-
-  it("should throw an error if data exceeds bytes32 size limit", async () => {
-    const mockMintEligibility = true;
-    const mockData = "A".repeat(33);
-
-    await expect(
-      create_signature(mockAddress, mockMintEligibility, mockData)
-    ).rejects.toThrow("Data exceeds bytes32 size limit");
-  });
-});
-
-describe("verifyTx", () => {
-  const mockAddress: Address = "0x1234567890abcdef1234567890abcdef12345678";
-  const januaryTimestamp = Math.floor(new Date("2025-01-15").getTime() / 1000);
-  const decemberTimestamp = Math.floor(new Date("2024-12-15").getTime() / 1000);
-
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
-
-  it("should return true and transaction count when transactions exist in January 2025", async () => {
-    mockedAxios.get.mockResolvedValue({
-      data: {
-        status: "1",
-        result: [
-          { timeStamp: januaryTimestamp.toString() },
-          { timeStamp: januaryTimestamp.toString() },
-          { timeStamp: decemberTimestamp.toString() }, // Should be ignored
-        ],
-      },
+  describe("verifyTx", () => {
+    it("should return true and count for transactions in January 2025", async () => {
+      const [isEligible, count] = await verifyTx(mockAddress);
+      expect(isEligible).toBe(true);
+      expect(count).toBe("2");
     });
 
-    const [isEligible, txCount] = await verifyTx(mockAddress);
+    it("should handle API errors gracefully", async () => {
+      server.use(
+        http.get(
+          "https://api.w3w.ai/cyber/v1/explorer/address/:address/transactions",
+          () => {
+            return new HttpResponse(null, { status: 500 });
+          }
+        )
+      );
 
-    expect(isEligible).toBe(true);
-    expect(txCount).toBe("2");
-    expect(mockedAxios.get).toHaveBeenCalledTimes(1);
-    expect(mockedAxios.get).toHaveBeenCalledWith(
-      "https://api.socialscan.io/cyber",
-      expect.any(Object)
-    );
-  });
-
-  it("should return false and zero transaction count when no transactions exist in January 2025", async () => {
-    mockedAxios.get.mockResolvedValue({
-      data: {
-        status: "1",
-        result: [{ timeStamp: decemberTimestamp.toString() }],
-      },
+      await expect(verifyTx(mockAddress)).rejects.toThrow(
+        "Failed to verify address transactions"
+      );
     });
 
-    const [isEligible, txCount] = await verifyTx(mockAddress);
+    it("should return false and 0 for no transactions", async () => {
+      server.use(
+        http.get(
+          "https://api.w3w.ai/cyber/v1/explorer/address/:address/transactions",
+          () => {
+            return HttpResponse.json({ data: [] });
+          }
+        )
+      );
 
-    expect(isEligible).toBe(false);
-    expect(txCount).toBe("0");
+      const [isEligible, count] = await verifyTx(mockAddress);
+      expect(isEligible).toBe(false);
+      expect(count).toBe("0");
+    });
   });
 
-  it("should return false when API returns unsuccessful status", async () => {
-    mockedAxios.get.mockResolvedValue({
-      data: {
-        status: "0",
-        result: [],
-      },
+  describe("create_signature", () => {
+    it("should create valid signature with verification results", async () => {
+      const [isEligible, count] = await verifyTx(mockAddress);
+
+      const signature = await create_signature(mockAddress, isEligible, count);
+
+      expect(signature).toMatch(/^0x[a-fA-F0-9]{128}$/);
+      expect(signature).toBeTruthy();
     });
 
-    const [isEligible, txCount] = await verifyTx(mockAddress);
+    it("should throw error for invalid data size", async () => {
+      await expect(
+        create_signature(mockAddress, true, "A".repeat(33))
+      ).rejects.toThrow("Data exceeds bytes32 size limit");
+    });
 
-    expect(isEligible).toBe(false);
-    expect(txCount).toBe("0");
-  });
+    it("should create different signatures for different eligibility", async () => {
+      const sig1 = await create_signature(mockAddress, true, "1");
+      const sig2 = await create_signature(mockAddress, false, "1");
 
-  it("should throw an error when the API call fails", async () => {
-    mockedAxios.get.mockRejectedValue(new Error("Network Error"));
+      expect(sig1).not.toEqual(sig2);
+      expect(sig1).toMatch(/^0x[a-fA-F0-9]{128}$/);
+      expect(sig2).toMatch(/^0x[a-fA-F0-9]{128}$/);
+    });
 
-    await expect(verifyTx(mockAddress)).rejects.toThrow(
-      "Failed to verify address on Cyber"
-    );
+    it("should throw error when private key is missing", async () => {
+      delete process.env.VERIFIER_PRIVATE_KEY;
+
+      await expect(create_signature(mockAddress, true, "1")).rejects.toThrow();
+    });
   });
 });

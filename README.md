@@ -1,13 +1,12 @@
-# Verifier Template
+# Cyber Network Transaction Verifier - January 2025
 
-This project provides a template for verifying Ethereum addresses on the Base network. It includes two main verification methods: balance checking and transaction history verification.
+This project provides a template for verifying Ethereum addresses on the Cyber network. It verifies transaction history on the Cyber network during January 2025.
 
 ## Project Structure
 
 ```
-VERIFIER-TEMPLATE
+verify-cyber-cred
 ├── api
-│   ├── balance-of-eth-base.ts
 │   ├── create-tx-base.ts
 │   └── signature.ts
 ├── test
@@ -24,9 +23,8 @@ VERIFIER-TEMPLATE
 
 ## Features
 
-1. **Balance Verification**: Checks if an address has a minimum balance of 0.1 ETH on the Base network.
-2. **Transaction Verification**: Verifies if an address has any transactions on the Base network.
-3. **Signature Generation**: Creates a signature for verified addresses.
+1. **Transaction Verification**: Verifies if an address has any transactions on the Cyber network during January 2025.
+2. **Signature Generation**: Creates a cryptographic signature for verified addresses containing eligibility status and transaction count.
 
 ## Setup
 
@@ -37,19 +35,14 @@ VERIFIER-TEMPLATE
    ```
 3. Copy `.env.sample` to `.env` and fill in the required values:
    ```
-   BASESCAN_API_KEY=your_basescan_api_key
-   SIGNER_PRIVATE_KEY=your_private_key
+   VERIFIER_PRIVATE_KEY=your_private_key
    ```
 
 ## Usage
 
 ### Balance Verification
 
-The `balance-of-eth-base.ts` file contains the logic for checking an address's balance on the Base network.
-
-### Transaction Verification
-
-The `create-tx-base.ts` file handles the verification of an address's transaction history using the Basescan API.
+The `create-tx-cyber.ts` file contains the logic for checking an address's interaction on cyber in month january 2025.
 
 ### Running Tests
 
@@ -63,32 +56,13 @@ bun run test
 
 The project is designed to be deployed as serverless functions. The main handler functions are:
 
-- `/api/balance-of-eth-base`: Checks the balance of a given address
-- `/api/create-tx-base`: Verifies the transaction history of a given address
+- `/api/create-tx-cyber`: check transaction count on cyber in month january 2025
 
 Both endpoints return a JSON response with the verification result and a signature.
 
 ## Environment Variables
 
-- `BASESCAN_API_KEY`: Your Basescan API key for accessing the Basescan API
-- `SIGNER_PRIVATE_KEY`: Private key used for signing the verification results
+- `VERIFIER_PRIVATE_KEY`: Your Basescan API key for accessing the Basescan API
 
-## API Endpoints (Vercel Functions)
-
-This project is designed to be deployed as serverless functions using Vercel Functions. Each file in the api directory corresponds to a serverless function:
-
-/api/balance-of-eth-base: Checks the balance of a given address
-/api/create-tx-base: Verifies the transaction history of a given address
-
-Both endpoints return a JSON response with the verification result and a signature.
-
-Please also setup environment values to your vercel.
-
-## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
-
-## License
-
-MIT
-# verify-cyber-cred
